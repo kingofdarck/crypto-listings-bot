@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timedelta
 from typing import List, Set
 from exchange_monitor import ExchangeMonitor, Listing
+from enhanced_exchange_monitor import EnhancedExchangeMonitor
 from social_monitor import SocialMediaMonitor
 from telegram_bot import TelegramNotifier
 import config
@@ -94,12 +95,17 @@ class CryptoListingBot:
             async with ExchangeMonitor() as exchange_monitor:
                 exchange_listings = await exchange_monitor.get_all_listings()
             
+            # Расширенный мониторинг MEXC и OKX
+            async with EnhancedExchangeMonitor() as enhanced_monitor:
+                mexc_listings = await enhanced_monitor.get_mexc_listings_enhanced()
+                okx_listings = await enhanced_monitor.get_okx_listings_enhanced()
+            
             # Мониторинг социальных сетей и агрегаторов
             async with SocialMediaMonitor() as social_monitor:
                 social_listings = await social_monitor.get_all_social_listings()
             
             # Объединяем все листинги
-            all_listings = exchange_listings + social_listings
+            all_listings = exchange_listings + mexc_listings + okx_listings + social_listings
             
             new_upcoming_listings = []
             
@@ -114,7 +120,17 @@ class CryptoListingBot:
                     
                     if not existing:
                         new_upcoming_listings.append(listing)
-                        source_type = "социальные сети" if listing in social_listings else "официальный API"
+                        
+                        # Определяем источник
+                        if listing in social_listings:
+                            source_type = "социальные сети"
+                        elif listing in mexc_listings:
+                            source_type = "MEXC веб-скрапинг"
+                        elif listing in okx_listings:
+                            source_type = "OKX веб-скрапинг/API"
+                        else:
+                            source_type = "официальный API"
+                            
                         logging.info(f"Обнаружен новый предстоящий листинг из {source_type}: {listing.symbol} на {listing.exchange} в {listing.listing_time}")
             
             # Добавляем новые предстоящие листинги

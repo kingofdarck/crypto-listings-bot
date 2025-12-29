@@ -123,13 +123,62 @@ class ExchangeMonitor:
         """Получение предстоящих листингов с MEXC"""
         listings = []
         try:
-            # MEXC обычно анонсирует листинги в Twitter и на сайте
-            # Пока что возвращаем пустой список, так как у них нет публичного API для анонсов
-            # В будущем можно добавить парсинг их сайта или Twitter API
-            pass
+            # MEXC анонсы через их блог API
+            blog_url = "https://support.mexc.com/hc/en-us/sections/360000258333-New-Listings"
+            
+            async with self.session.get(blog_url) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    listings.extend(self._parse_mexc_announcements(content))
+            
+            # Также проверяем их Twitter через социальный мониторинг
+            # Это будет обработано в social_monitor.py
                             
         except Exception as e:
             logging.error(f"Ошибка при получении данных MEXC: {e}")
+            
+        return listings
+    
+    def _parse_mexc_announcements(self, html_content: str) -> List[Listing]:
+        """Парсинг анонсов MEXC"""
+        listings = []
+        
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Ищем статьи о листингах
+            articles = soup.find_all('a', class_='article-list-link')
+            
+            for article in articles[:10]:  # Последние 10 статей
+                title = article.get_text().strip()
+                link = article.get('href', '')
+                
+                # Проверяем ключевые слова
+                if any(keyword in title.lower() for keyword in ['listing', 'will list', 'new token', 'trading']):
+                    # Извлекаем символ токена
+                    symbol_match = re.search(r'\b([A-Z]{2,10})\b', title)
+                    if symbol_match:
+                        symbol = symbol_match.group(1)
+                        
+                        # Пытаемся извлечь время из заголовка
+                        listing_time = self._extract_listing_time(title)
+                        
+                        if not listing_time:
+                            # Если время не найдено, ставим через 1 час (будет уточнено позже)
+                            listing_time = datetime.now() + timedelta(hours=1)
+                        
+                        if listing_time > datetime.now():
+                            listings.append(Listing(
+                                exchange='MEXC',
+                                symbol=symbol,
+                                listing_time=listing_time,
+                                announcement_url=f"https://support.mexc.com{link}",
+                                status='upcoming'
+                            ))
+                            
+        except Exception as e:
+            logging.error(f"Ошибка парсинга анонсов MEXC: {e}")
             
         return listings
     
@@ -177,13 +226,97 @@ class ExchangeMonitor:
         """Получение предстоящих листингов с OKX"""
         listings = []
         try:
-            # OKX обычно анонсирует листинги в своих анонсах
-            # Пока что возвращаем пустой список, так как их API анонсов требует авторизацию
-            # В будущем можно добавить парсинг их сайта
-            pass
+            # OKX анонсы через их support сайт
+            announcements_url = "https://www.okx.com/support/hc/en-us/sections/115000275131-New-Crypto-Listings"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            async with self.session.get(announcements_url, headers=headers) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    listings.extend(self._parse_okx_announcements(content))
+            
+            # Также пробуем их публичный API для инструментов
+            try:
+                async with self.session.get("https://www.okx.com/api/v5/public/instruments?instType=SPOT", headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        # Проверяем новые инструменты (это для обнаружения уже запущенных листингов)
+                        recent_instruments = data.get('data', [])[:50]  # Последние 50
+                        
+                        for instrument in recent_instruments:
+                            inst_id = instrument.get('instId', '')
+                            list_time = instrument.get('listTime')
+                            
+                            if list_time:
+                                # Конвертируем timestamp в datetime
+                                list_datetime = datetime.fromtimestamp(int(list_time) / 1000)
+                                
+                                # Если листинг был недавно (в последние 24 часа)
+                                if datetime.now() - list_datetime < timedelta(hours=24):
+                                    symbol = inst_id.replace('-USDT', '').replace('-BTC', '')
+                                    
+                                    listings.append(Listing(
+                                        exchange='OKX',
+                                        symbol=symbol,
+                                        listing_time=list_datetime,
+                                        announcement_url="https://www.okx.com/trade-spot/" + inst_id.lower(),
+                                        status='active'  # Уже активный
+                                    ))
+            except Exception as api_error:
+                logging.warning(f"OKX API недоступен: {api_error}")
                             
         except Exception as e:
             logging.error(f"Ошибка при получении данных OKX: {e}")
+            
+        return listings
+    
+    def _parse_okx_announcements(self, html_content: str) -> List[Listing]:
+        """Парсинг анонсов OKX"""
+        listings = []
+        
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Ищем статьи о листингах
+            articles = soup.find_all('a', href=True)
+            
+            for article in articles[:15]:  # Проверяем первые 15 ссылок
+                title_elem = article.find(['h3', 'h4', 'span', 'div'])
+                if title_elem:
+                    title = title_elem.get_text().strip()
+                    link = article.get('href', '')
+                    
+                    # Проверяем ключевые слова для листингов
+                    if any(keyword in title.lower() for keyword in ['listing', 'will list', 'new token', 'spot trading', 'launch']):
+                        # Извлекаем символ токена
+                        symbol_match = re.search(r'\b([A-Z]{2,10})\b', title)
+                        if symbol_match:
+                            symbol = symbol_match.group(1)
+                            
+                            # Пытаемся извлечь время
+                            listing_time = self._extract_listing_time(title)
+                            
+                            if not listing_time:
+                                # Если время не найдено, ставим через 2 часа
+                                listing_time = datetime.now() + timedelta(hours=2)
+                            
+                            if listing_time > datetime.now():
+                                full_url = link if link.startswith('http') else f"https://www.okx.com{link}"
+                                
+                                listings.append(Listing(
+                                    exchange='OKX',
+                                    symbol=symbol,
+                                    listing_time=listing_time,
+                                    announcement_url=full_url,
+                                    status='upcoming'
+                                ))
+                                
+        except Exception as e:
+            logging.error(f"Ошибка парсинга анонсов OKX: {e}")
             
         return listings
     

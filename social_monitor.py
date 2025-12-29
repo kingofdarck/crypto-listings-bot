@@ -42,6 +42,18 @@ class SocialMediaMonitor:
                 source_type="twitter",
                 keywords=["listing", "new trading", "spot market"]
             ),
+            SocialSource(
+                name="MEXC Twitter",
+                url="https://api.twitter.com/2/users/by/username/MEXC_Official/tweets",
+                source_type="twitter", 
+                keywords=["listing", "new coin", "trading launch", "spot trading"]
+            ),
+            SocialSource(
+                name="OKX Twitter",
+                url="https://api.twitter.com/2/users/by/username/okx/tweets",
+                source_type="twitter",
+                keywords=["listing", "new token", "spot trading", "trading launch"]
+            ),
             
             # Telegram каналы
             SocialSource(
@@ -55,6 +67,18 @@ class SocialMediaMonitor:
                 url="https://t.me/s/Bybit_Announcements", 
                 source_type="telegram",
                 keywords=["listing", "spot trading", "new token"]
+            ),
+            SocialSource(
+                name="MEXC Announcements",
+                url="https://t.me/s/MEXC_Announcements",
+                source_type="telegram",
+                keywords=["listing", "new coin", "trading starts"]
+            ),
+            SocialSource(
+                name="OKX Announcements", 
+                url="https://t.me/s/OKXOfficial_English",
+                source_type="telegram",
+                keywords=["listing", "spot trading", "new token", "launch"]
             ),
             
             # Агрегаторы и календари
