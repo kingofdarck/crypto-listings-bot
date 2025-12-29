@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timedelta
 from typing import List, Set
 from exchange_monitor import ExchangeMonitor, Listing
+from social_monitor import SocialMediaMonitor
 from telegram_bot import TelegramNotifier
 import config
 
@@ -89,50 +90,56 @@ class CryptoListingBot:
     async def check_listings(self):
         """Основная функция проверки предстоящих листингов"""
         try:
-            async with ExchangeMonitor() as monitor:
-                self.monitor = monitor
-                
-                # Получаем только предстоящие листинги
-                all_listings = await monitor.get_all_listings()
-                
-                new_upcoming_listings = []
-                
-                for listing in all_listings:
-                    # Обрабатываем только предстоящие листинги
-                    if listing.status == 'upcoming' and listing.listing_time > datetime.now():
-                        listing_key = f"{listing.exchange}:{listing.symbol}"
-                        
-                        # Проверяем, не знаем ли мы уже об этом листинге
-                        existing = next((l for l in self.upcoming_listings 
-                                       if l.symbol == listing.symbol and l.exchange == listing.exchange), None)
-                        
-                        if not existing:
-                            new_upcoming_listings.append(listing)
-                            logging.info(f"Обнаружен новый предстоящий листинг: {listing.symbol} на {listing.exchange} в {listing.listing_time}")
-                
-                # Добавляем новые предстоящие листинги
-                self.upcoming_listings.extend(new_upcoming_listings)
-                
-                # Удаляем устаревшие листинги (которые уже прошли)
-                current_time = datetime.now()
-                expired_listings = []
-                
-                for listing in self.upcoming_listings[:]:
-                    if listing.listing_time <= current_time:
-                        expired_listings.append(listing)
-                        self.upcoming_listings.remove(listing)
-                        logging.info(f"Листинг {listing.symbol} на {listing.exchange} начался!")
-                
-                # Отправляем уведомления о начавшихся листингах
-                for listing in expired_listings:
-                    await self.send_listing_started_alerts(listing)
-                
-                # Проверяем предстоящие листинги на близость к времени листинга
-                await self.check_upcoming_listings()
-                
-                # Сохраняем данные
-                await self.save_data()
-                
+            # Мониторинг официальных API бирж
+            async with ExchangeMonitor() as exchange_monitor:
+                exchange_listings = await exchange_monitor.get_all_listings()
+            
+            # Мониторинг социальных сетей и агрегаторов
+            async with SocialMediaMonitor() as social_monitor:
+                social_listings = await social_monitor.get_all_social_listings()
+            
+            # Объединяем все листинги
+            all_listings = exchange_listings + social_listings
+            
+            new_upcoming_listings = []
+            
+            for listing in all_listings:
+                # Обрабатываем только предстоящие листинги
+                if listing.status == 'upcoming' and listing.listing_time > datetime.now():
+                    listing_key = f"{listing.exchange}:{listing.symbol}"
+                    
+                    # Проверяем, не знаем ли мы уже об этом листинге
+                    existing = next((l for l in self.upcoming_listings 
+                                   if l.symbol == listing.symbol and l.exchange == listing.exchange), None)
+                    
+                    if not existing:
+                        new_upcoming_listings.append(listing)
+                        source_type = "социальные сети" if listing in social_listings else "официальный API"
+                        logging.info(f"Обнаружен новый предстоящий листинг из {source_type}: {listing.symbol} на {listing.exchange} в {listing.listing_time}")
+            
+            # Добавляем новые предстоящие листинги
+            self.upcoming_listings.extend(new_upcoming_listings)
+            
+            # Удаляем устаревшие листинги (которые уже прошли)
+            current_time = datetime.now()
+            expired_listings = []
+            
+            for listing in self.upcoming_listings[:]:
+                if listing.listing_time <= current_time:
+                    expired_listings.append(listing)
+                    self.upcoming_listings.remove(listing)
+                    logging.info(f"Листинг {listing.symbol} на {listing.exchange} начался!")
+            
+            # Отправляем уведомления о начавшихся листингах
+            for listing in expired_listings:
+                await self.send_listing_started_alerts(listing)
+            
+            # Проверяем предстоящие листинги на близость к времени листинга
+            await self.check_upcoming_listings()
+            
+            # Сохраняем данные
+            await self.save_data()
+            
         except Exception as e:
             logging.error(f"Ошибка при проверке листингов: {e}")
     

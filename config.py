@@ -33,6 +33,16 @@ CHECK_INTERVAL = 300  # 5 минут в секундах
 LISTING_ALERT_INTERVAL = 60  # 1 минута для дублирования уведомлений
 LISTING_ALERT_COUNT = 3  # Количество дублирований
 
+# Social Media Monitoring
+SOCIAL_MONITORING_ENABLED = True
+SOCIAL_CHECK_INTERVAL = 600  # 10 минут для социальных сетей (чтобы не перегружать)
+
+# Источники для мониторинга
+ENABLE_TWITTER_MONITORING = True
+ENABLE_TELEGRAM_MONITORING = True  
+ENABLE_RSS_MONITORING = True
+ENABLE_AGGREGATOR_MONITORING = True
+
 # Logging
 LOG_LEVEL = "INFO"
 LOG_FILE = "crypto_listings.log"
