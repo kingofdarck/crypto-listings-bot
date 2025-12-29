@@ -32,11 +32,10 @@ ENV/
 *.swp
 *.swo
 
-# Logs
+# Logs (Railway uses stdout)
 *.log
-crypto_listings.log
 
-# Data files
+# Data files (Railway ephemeral storage)
 listings_data.json
 
 # OS
@@ -46,3 +45,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Railway
+.railway/

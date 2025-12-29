@@ -2,19 +2,20 @@ import asyncio
 import logging
 import json
 import os
+import signal
+import sys
 from datetime import datetime, timedelta
 from typing import List, Set
 from exchange_monitor import ExchangeMonitor, Listing
 from telegram_bot import TelegramNotifier
 import config
 
-# Настройка логирования
+# Настройка логирования для Railway
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL),
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(config.LOG_FILE, encoding='utf-8'),
-        logging.StreamHandler()
+        logging.StreamHandler(sys.stdout)  # Логи в stdout для Railway
     ]
 )
 
@@ -26,6 +27,16 @@ class CryptoListingBot:
         self.upcoming_listings = []
         self.active_alerts = {}  # symbol -> alert_count
         self.data_file = "listings_data.json"
+        self.running = True
+        
+        # Обработка сигналов для корректного завершения
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler)
+    
+    def _signal_handler(self, signum, frame):
+        """Обработчик сигналов для корректного завершения"""
+        logging.info(f"Получен сигнал {signum}, завершение работы...")
+        self.running = False
         
     async def load_data(self):
         """Загрузка сохраненных данных"""
@@ -185,7 +196,7 @@ class CryptoListingBot:
         
         last_report_time = datetime.now()
         
-        while True:
+        while self.running:
             try:
                 # Проверяем листинги
                 await self.check_listings()
@@ -205,6 +216,8 @@ class CryptoListingBot:
             except Exception as e:
                 logging.error(f"Ошибка в основном цикле: {e}")
                 await asyncio.sleep(60)  # Ждем минуту при ошибке
+        
+        logging.info("Бот завершил работу")
 
 async def main():
     bot = CryptoListingBot()

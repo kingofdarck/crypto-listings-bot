@@ -1,8 +1,8 @@
 import os
 
 # Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN = "8565304713:AAFpnuNkp4QR6Yk9H-5NoN8l3Z1pN2WigKQ"
-CHAT_ID = None  # Будет установлен автоматически при первом сообщении
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8565304713:AAFpnuNkp4QR6Yk9H-5NoN8l3Z1pN2WigKQ")
+CHAT_ID = os.getenv("CHAT_ID", None)  # Можно установить через переменную окружения
 
 # Exchange APIs
 EXCHANGE_APIS = {
