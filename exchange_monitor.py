@@ -211,8 +211,12 @@ class ExchangeMonitor:
     
     def _extract_listing_time(self, content: str) -> Optional[datetime]:
         """Извлечение времени листинга из текста"""
-        import re
-        from dateutil import parser
+        try:
+            import re
+            from dateutil import parser
+        except ImportError:
+            logging.error("Не удалось импортировать dateutil")
+            return None
         
         # Паттерны для поиска времени
         time_patterns = [
